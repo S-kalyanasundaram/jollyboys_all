@@ -1,40 +1,76 @@
 import streamlit as st
 from supabase import create_client, ClientOptions
+import logging
 
-# -------------------------------------------------
-# SUPABASE CONNECTION
-# -------------------------------------------------
-SUPABASE_URL = "https://ckbvfhjypiqgeprxqcqv.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrYnZmaGp5cGlxZ2VwcnhxY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MDA1NDIsImV4cCI6MjA4NTA3NjU0Mn0.CzzxqtR_XpKjwiT8p1gqAE_Z6RLckwzJZhWwB_bwEgg"
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-import os
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-from supabase import create_client
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# =====================================================
+# CONFIGURATION
+# =====================================================
 
 st.set_page_config(layout="wide")
 st.title("💼 Admin Monthly & Loan Management Panel")
 
+logging.basicConfig(level=logging.INFO)
+
+# =====================================================
+# SUPABASE CONNECTION (SECURE)
+# =====================================================
+
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+
+    options = ClientOptions(postgrest_client_timeout=10)
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options)
+
+except Exception as e:
+    st.error("Failed to initialize Supabase connection.")
+    st.stop()
+
+
+# =====================================================
+# HELPER FUNCTIONS
+# =====================================================
+
+def fetch_users():
+    try:
+        response = supabase.table("amount_2026") \
+            .select("user_id,name") \
+            .execute()
+
+        if response.data is None:
+            return []
+
+        return response.data
+
+    except Exception as e:
+        logging.error(f"Fetch users error: {e}")
+        return []
+
+
+def fetch_loan(user_id):
+    try:
+        response = supabase.table("loan_details") \
+            .select("*") \
+            .eq("user_id", int(user_id)) \
+            .execute()
+
+        return response.data if response.data else None
+
+    except Exception as e:
+        logging.error(f"Fetch loan error: {e}")
+        return None
+
+
 # =====================================================
 # FETCH USERS
 # =====================================================
-users_response = supabase.table("amount_2026") \
-    .select("user_id,name") \
-    .execute()
 
-if not users_response.data:
+users = fetch_users()
+
+if not users:
     st.error("No users found in amount_2026 table.")
     st.stop()
 
-users = users_response.data
-
-# Convert user_id to int (VERY IMPORTANT)
 user_dict = {
     f"{u['name']} ({u['user_id']})": int(u["user_id"])
     for u in users
@@ -46,27 +82,32 @@ user_id = user_dict[selected_user]
 # =====================================================
 # 📅 MONTHLY SECTION
 # =====================================================
+
 st.subheader("📅 Monthly Amount Entry")
 
-months = [
+income_months = [
     "jan","feb","mar","apr","may","jun",
     "jul","aug","sep","oct","nov","dec"
 ]
 
-selected_month = st.selectbox("Select Month", months)
+selected_income_month = st.selectbox("Select Month", income_months)
 
-# Fetch current month value
-month_response = supabase.table("amount_2026") \
-    .select(selected_month) \
-    .eq("user_id", user_id) \
-    .execute()
+try:
+    month_response = supabase.table("amount_2026") \
+        .select(selected_income_month) \
+        .eq("user_id", user_id) \
+        .execute()
 
-if month_response.data:
-    current_amount = month_response.data[0].get(selected_month) or 0
-else:
-    current_amount = 0
+    current_amount = (
+        month_response.data[0].get(selected_income_month)
+        if month_response.data else 0
+    ) or 0
 
-st.info(f"Existing Amount for {selected_month.upper()}: ₹ {current_amount}")
+except Exception as e:
+    st.error("Error fetching monthly data.")
+    st.stop()
+
+st.info(f"Existing Amount for {selected_income_month.upper()}: ₹ {current_amount}")
 
 new_amount = st.number_input(
     "Enter / Update Monthly Amount",
@@ -74,57 +115,51 @@ new_amount = st.number_input(
     value=int(current_amount)
 )
 
-# ------------------ UPDATE LOGIC ------------------
 if st.button("Update Monthly Amount"):
 
     try:
-        # Check row existence
         check = supabase.table("amount_2026") \
             .select("user_id") \
             .eq("user_id", user_id) \
             .execute()
 
         if check.data:
-            # UPDATE
-            response = supabase.table("amount_2026") \
-                .update({selected_month: new_amount}) \
+            supabase.table("amount_2026") \
+                .update({selected_income_month: new_amount}) \
                 .eq("user_id", user_id) \
                 .execute()
         else:
-            # INSERT
-            response = supabase.table("amount_2026") \
+            supabase.table("amount_2026") \
                 .insert({
                     "user_id": user_id,
-                    selected_month: new_amount
+                    selected_income_month: new_amount
                 }) \
                 .execute()
 
         st.success("✅ Monthly Amount Saved Successfully!")
+        logging.info(f"Monthly updated for user {user_id}")
         st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Update Failed: {e}")
+        logging.error(f"Monthly update failed: {e}")
+        st.error("❌ Update Failed")
 
 
 # =====================================================
 # 🏦 LOAN SECTION
 # =====================================================
+
 st.subheader("🏦 Loan Management")
 
 manage_loan = st.checkbox("Manage Loan")
 
 if manage_loan:
 
-    loan_response = supabase.table("loan_details") \
-        .select("loan_amount,intrest_amount,status_id") \
-        .eq("user_id", user_id) \
-        .execute()
-
-    existing_loan = loan_response.data
+    loan_data = fetch_loan(user_id)
     existing_loan_amount = 0
 
-    if existing_loan:
-        existing_loan_amount = existing_loan[0].get("loan_amount") or 0
+    if loan_data:
+        existing_loan_amount = loan_data[0].get("loan_amount") or 0
 
     loan_amount = st.number_input(
         "Enter Loan Amount",
@@ -158,13 +193,13 @@ if manage_loan:
             row_exists = True if loan_check.data else False
 
             if status_option == "Closed":
-                loan_data = {
+                loan_payload = {
                     "loan_amount": None,
                     "intrest_amount": None,
                     "status_id": 2
                 }
             else:
-                loan_data = {
+                loan_payload = {
                     "loan_amount": loan_amount,
                     "intrest_amount": interest_amount,
                     "status_id": 1
@@ -172,20 +207,22 @@ if manage_loan:
 
             if row_exists:
                 supabase.table("loan_details") \
-                    .update(loan_data) \
+                    .update(loan_payload) \
                     .eq("user_id", user_id) \
                     .execute()
             else:
-                loan_data["user_id"] = user_id
+                loan_payload["user_id"] = user_id
                 supabase.table("loan_details") \
-                    .insert(loan_data) \
+                    .insert(loan_payload) \
                     .execute()
 
             st.success("✅ Loan Saved Successfully!")
+            logging.info(f"Loan updated for user {user_id}")
             st.rerun()
 
         except Exception as e:
-            st.error(f"❌ Loan Operation Failed: {e}")
+            logging.error(f"Loan save error: {e}")
+            st.error("❌ Loan Operation Failed")
 
 
 # =====================================================
@@ -194,29 +231,19 @@ if manage_loan:
 
 st.subheader("🏦 Admin Loan Monthly & Interest Update")
 
-# Fetch existing loan row
-loan_info = supabase.table("loan_details") \
-    .select("*") \
-    .eq("user_id", int(user_id)) \
-    .execute()
+loan_info = fetch_loan(user_id)
 
-if not loan_info.data:
+if not loan_info:
     st.warning("No Loan Record Found For This User")
     st.stop()
 
-loan_data = loan_info.data[0]
+loan_data = loan_info[0]
 
-# -----------------------------
-# Default Values From Database
-# -----------------------------
 loan_amount = loan_data.get("loan_amount") or 0
 interest_amount_db = loan_data.get("intrest_amount") or 0
 
 st.write(f"💰 Loan Amount: ₹ {loan_amount}")
 
-# -----------------------------
-# Interest Amount Update
-# -----------------------------
 interest_amount = st.number_input(
     "Enter / Update Interest Amount",
     min_value=0.0,
@@ -228,33 +255,34 @@ if st.button("Update Interest Amount"):
     try:
         supabase.table("loan_details") \
             .update({"intrest_amount": interest_amount}) \
-            .eq("user_id", int(user_id)) \
+            .eq("user_id", user_id) \
             .execute()
 
         st.success("✅ Interest Amount Updated Successfully!")
         st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Failed to Update Interest: {e}")
+        logging.error(f"Interest update error: {e}")
+        st.error("❌ Failed to Update Interest")
 
 
 st.divider()
 
-# -----------------------------
-# Monthly EMI Entry Section
-# -----------------------------
+# =====================================================
+# EMI SECTION
+# =====================================================
 
-months = [
+emi_months = [
     "in_jan","in_feb","in_mar","in_apr","in_may","in_jun",
     "in_jul","in_aug","in_sep","in_oct","in_nov","in_dec"
 ]
 
-selected_month = st.selectbox("Select Month to Update EMI", months)
+selected_emi_month = st.selectbox("Select Month to Update EMI", emi_months)
 
-current_month_value = loan_data.get(selected_month) or 0
+current_month_value = loan_data.get(selected_emi_month) or 0
 
 emi_amount = st.number_input(
-    f"Enter EMI Amount for {selected_month.upper()}",
+    f"Enter EMI Amount for {selected_emi_month.upper()}",
     min_value=0,
     value=int(current_month_value)
 )
@@ -263,71 +291,65 @@ if st.button("Update Monthly EMI"):
 
     try:
         supabase.table("loan_details") \
-            .update({selected_month: emi_amount}) \
-            .eq("user_id", int(user_id)) \
+            .update({selected_emi_month: emi_amount}) \
+            .eq("user_id", user_id) \
             .execute()
 
-        st.success(f"✅ {selected_month.upper()} Updated Successfully!")
+        st.success(f"✅ {selected_emi_month.upper()} Updated Successfully!")
         st.rerun()
 
     except Exception as e:
-        st.error(f"❌ EMI Update Failed: {e}")
+        logging.error(f"EMI update error: {e}")
+        st.error("❌ EMI Update Failed")
 
+
+# =====================================================
+# CURRENT LOAN SUMMARY
+# =====================================================
 
 st.subheader("📊 Current Loan Details")
 
 try:
-    loan_info = supabase.table("loan_details") \
-        .select("loan_amount,intrest_amount,loan_total,status_id") \
-        .eq("user_id", int(user_id)) \
+    loan_summary = supabase.table("loan_details") \
+        .select("loan_amount,intrest_amount,loan_total,status_id,"
+                "in_jan,in_feb,in_mar,in_apr,in_may,in_jun,"
+                "in_jul,in_aug,in_sep,in_oct,in_nov,in_dec") \
+        .eq("user_id", user_id) \
         .execute()
 
-    if loan_info.data and len(loan_info.data) > 0:
+    if loan_summary.data:
 
-        loan_data = loan_info.data[0]
+        data = loan_summary.data[0]
 
-        loan_amount = loan_data.get("loan_amount") or 0
-        interest_amount = loan_data.get("intrest_amount") or 0
-        loan_total = loan_data.get("loan_total") or 0
-        status_id = loan_data.get("status_id", 0)
+        STATUS_MAP = {1: "Ongoing", 2: "Closed"}
+        status_text = STATUS_MAP.get(data.get("status_id"), "Unknown")
 
-        if status_id == 1:
-            status_text = "Ongoing"
-        elif status_id == 2:
-            status_text = "Closed"
-        else:
-            status_text = "Unknown"
-            
         paid_months = [
-            loan_data.get("in_jan") or 0,
-            loan_data.get("in_feb") or 0,
-            loan_data.get("in_mar") or 0,
-            loan_data.get("in_apr") or 0,
-            loan_data.get("in_may") or 0,
-            loan_data.get("in_jun") or 0,
-            loan_data.get("in_jul") or 0,
-            loan_data.get("in_aug") or 0,
-            loan_data.get("in_sep") or 0,
-            loan_data.get("in_oct") or 0,
-            loan_data.get("in_nov") or 0,
-            loan_data.get("in_dec") or 0
-            ]
-            
-        
-    
+            data.get("in_jan") or 0,
+            data.get("in_feb") or 0,
+            data.get("in_mar") or 0,
+            data.get("in_apr") or 0,
+            data.get("in_may") or 0,
+            data.get("in_jun") or 0,
+            data.get("in_jul") or 0,
+            data.get("in_aug") or 0,
+            data.get("in_sep") or 0,
+            data.get("in_oct") or 0,
+            data.get("in_nov") or 0,
+            data.get("in_dec") or 0
+        ]
+
         total_paid = sum(paid_months)
-        
-        
-        st.write(f"💰 Loan Amount: ₹ {loan_amount}")
-        st.write(f"📈 Interest Amount: ₹ {interest_amount}")
-        st.write(f"🧮 Loan Total: ₹ {loan_total}")
+
+        st.write(f"💰 Loan Amount: ₹ {data.get('loan_amount') or 0}")
+        st.write(f"📈 Interest Amount: ₹ {data.get('intrest_amount') or 0}")
+        st.write(f"🧮 Loan Total: ₹ {data.get('loan_total') or 0}")
         st.write(f"📌 Status: {status_text}")
+        st.write(f"✅ Total EMI Paid: ₹ {total_paid}")
 
     else:
         st.info("No Loan Record Found")
 
 except Exception as e:
-    st.error(f"Error fetching loan details: {e}")
-
-
-
+    logging.error(f"Loan summary error: {e}")
+    st.error("Error fetching loan details.")
