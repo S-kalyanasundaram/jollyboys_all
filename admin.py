@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client, ClientOptions
 import logging
+import os
 
 # =====================================================
 # CONFIGURATION
@@ -15,15 +16,12 @@ logging.basicConfig(level=logging.INFO)
 # SUPABASE CONNECTION (SECURE)
 # =====================================================
 
-try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-    options = ClientOptions(postgrest_client_timeout=10)
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-except Exception as e:
-    st.error("Failed to initialize Supabase connection.")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error("Missing Supabase environment variables.")
     st.stop()
 
 
@@ -353,3 +351,4 @@ try:
 except Exception as e:
     logging.error(f"Loan summary error: {e}")
     st.error("Error fetching loan details.")
+
