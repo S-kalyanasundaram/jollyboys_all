@@ -4,11 +4,15 @@ from supabase import create_client, ClientOptions
 # -------------------------------------------------
 # SUPABASE CONNECTION
 # -------------------------------------------------
-SUPABASE_URL = "https://ckbvfhjypiqgeprxqcqv.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrYnZmaGp5cGlxZ2VwcnhxY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MDA1NDIsImV4cCI6MjA4NTA3NjU0Mn0.CzzxqtR_XpKjwiT8p1gqAE_Z6RLckwzJZhWwB_bwEgg"   # 🔴 Replace with regenerated key
+import os
 
-options = ClientOptions(postgrest_client_timeout=10)
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+from supabase import create_client
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.set_page_config(layout="wide")
 st.title("💼 Admin Monthly & Loan Management Panel")
@@ -320,4 +324,5 @@ try:
 
 except Exception as e:
     st.error(f"Error fetching loan details: {e}")
+
 
