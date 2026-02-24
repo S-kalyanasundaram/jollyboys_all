@@ -11,8 +11,9 @@ st.title("💼 Admin Monthly & Loan Management Panel")
 # =====================================================
 # SUPABASE CONNECTION (PRODUCTION SAFE)
 # =====================================================
-SUPABASE_URL = os.getenv("SUPABASE_URL") or st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = os.getenv("SUPABASE_KEY") or st.secrets["SUPABASE_KEY"]
+
+SUPABASE_URL = os.getenv("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     st.error("❌ Supabase environment variables not configured.")
@@ -20,8 +21,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 @st.cache_resource
 def init_supabase():
-    options = ClientOptions(postgrest_client_timeout=10)
-    return create_client(SUPABASE_URL, SUPABASE_KEY, options)
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 try:
     supabase = init_supabase()
@@ -315,3 +315,4 @@ try:
 
 except Exception as e:
     st.error(f"Error fetching loan details: {e}")
+
