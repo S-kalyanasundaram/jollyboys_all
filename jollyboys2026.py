@@ -1,3 +1,5 @@
+# SUPABASE CONFIG
+import os
 import streamlit as st
 from supabase import create_client
 import pandas as pd
@@ -6,20 +8,28 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # -------------------------
-# SUPABASE CONFIG
+# SUPABASE CONFIG (Render Safe)
 # -------------------------
-SUPABASE_URL = "https://ckbvfhjypiqgeprxqcqv.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrYnZmaGp5cGlxZ2VwcnhxY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MDA1NDIsImV4cCI6MjA4NTA3NjU0Mn0.CzzxqtR_XpKjwiT8p1gqAE_Z6RLckwzJZhWwB_bwEgg"
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error("Supabase credentials not configured in Render.")
+    st.stop()
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # -------------------------
-# EMAIL CONFIG
+# EMAIL CONFIG (Render Safe)
 # -------------------------
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-SENDER_EMAIL = "yourgmail@gmail.com"
-SENDER_PASSWORD = "your_app_password"
 
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
+SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
+
+if not SENDER_EMAIL or not SENDER_PASSWORD:
+    st.warning("Email credentials not configured. Email reminders disabled.")
 # -------------------------
 # PAGE CONFIG
 # -------------------------
@@ -256,3 +266,4 @@ Jolly Boys Finance
         card("2025 Total", total_2025, "blue")
     with y3:
         card("2026 Total", total_2026, "orange")
+
